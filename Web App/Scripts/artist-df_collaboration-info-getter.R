@@ -1,0 +1,262 @@
+# Run every Sunday morning after Billboard. 
+# Takes approx 10 min for artist_df, 2.5 hrs for collaboration info, new-artists around 3 min.
+library(dplyr)
+library(tidyverse)
+library(spotifyr)
+library(plyr)
+
+# Spotify Credentials
+Sys.setenv(SPOTIFY_CLIENT_ID = '111c591bacc340e2b10d5bf3d0ee0308')
+Sys.setenv(SPOTIFY_CLIENT_SECRET = 'e84ab3fcac7e4821ba33a9e05b3baa43')
+Sys.setenv(GENIUS_API_TOKEN = 'QrL3LZ6y6KEuHi1DdLL1F3VFdGH_5S02WX7UiiMEadYQF82LEfv_H_mghPn00hbq')
+access_token <- get_spotify_access_token()
+
+#____________________________________________________
+#________________HELPER FUNCTIONS____________________
+#____________________________________________________
+
+# For each artist, obtain their basic info.
+get_artist_df <- function(artists){
+  names <- c()
+  for (artist in artists) {
+    df <- search_spotify(
+      artist,
+      type = c("artist"),
+      limit = 1)
+    
+    # Keep track of artists with no match.
+    if (NROW(df) == 0){
+      print("Couldn't find!")
+      print(artist)
+      names <- append(names, artist)
+      return()
+    }
+    
+    else {
+      simplified_artist <- gsub(' |the|The|And|and|&|-|®|.','',artist) %>% tolower() %>% stringi::stri_trans_general("Latin-ASCII")
+      simplified_df_name <- gsub(' |the|The|And|and|&|-|®|.','',df$name) %>% tolower() %>% stringi::stri_trans_general("Latin-ASCII")
+      if (simplified_artist != simplified_df_name){
+        print(paste("Mismatch:", artist, df$name))
+      }
+      return(df)
+    }
+  }
+}
+
+# Changes the genres column from a list to a string separated by semi-colons.
+genre_helper <- function(genre){
+  if (length(genre) == 0) {
+    return(NA)
+  }
+  else {
+    return(paste(genre, collapse=";"))
+  }
+}
+
+# Gets all collaborations and the number of total songs for the artist passed in.
+get_collaborators <- function(artist_id){
+  print(artist_id)
+  # Garth Brooks, Billy Gibbons, Zay Hilfigerrr & Zayion McCall, Remy Boyz, Joanna Newsom have no albums and throw errors.
+  if (artist_id %in% c("4BclNkZtAUq1YrYNzye3N7", "4DqeVw9M195lj22iU1elxD", "1HYgMQ89yfWLakGa0tWBXX", "2s0yxtiHiyGe6CY4mbDYFi", "4gn6f5jaOO75s0oF7ozqGG")) {
+    return(NULL)
+  }
+  
+  # Get albums and singles for a single artist.
+  albums <- get_artist_audio_features(
+    artist = artist_id,
+    include_groups = c("album", "single"),
+    dedupe_albums = TRUE
+  ) %>% drop_na("track_id")
+  artist_name = albums$artist_name[1]
+  total_songs <- NROW(unique(albums$track_name))
+  collab_year_df <- albums[,(names(albums) %in% c("artists", "album_release_year"))]
+  
+  list_of_collabs <- apply(collab_year_df, 1, exploder)
+  collaborations <- ldply(list_of_collabs, data.frame)
+  
+  filtered <-filter(collaborations, id != artist_id)
+  
+  if (NROW(filtered) == 0) {
+    return(data.frame(artist1 = artist_name, id1 = artist_id, artist2 = "", id2 = "", year = NA, total_songs = total_songs))
+  }
+  
+  artist_collabs <- data.frame(artist1 = artist_name, id1 = artist_id, artist2 = collaborations$name, id2 = collaborations$id, year = collaborations$album_release_year, total_songs = total_songs) %>% filter(id2 != artist_id)
+  Sys.sleep(5)
+  # If it's the very first row, write column names. Otherwise don't.
+  if (artist_id == slice_head(artist_df, n=1)$id){
+    write.table(artist_collabs, file = collab_file_name, sep = ",", append = TRUE, col.names = TRUE, row.names = FALSE)
+  } else {
+    write.table(artist_collabs, file = collab_file_name, sep = ",", append = TRUE, col.names = FALSE, row.names = FALSE)
+  }
+  #return(artist_collabs)
+}
+
+exploder <- function(row){
+  year <- row[1]
+  listed_df <- row[2]
+  df <- listed_df[[1]]
+  ids <- df$id
+  names <- df$name
+  unpacked_df <- data.frame(year = year, id = ids, name = names)
+  return(unpacked_df)
+}
+
+# Gets information (ID, genres, name, popularity, number of followers) for the artists passed in.
+get_new_artists <- function(artists){
+  new_artists = NULL
+  count <- 1
+  while (count < length(artists)) {
+    fifty_new <- get_artists(artists[count:(count+49)])
+    new_artists = rbind(new_artists, fifty_new)
+    count <- count + 50
+  }
+  new_artists <- new_artists[!is.na(new_artists$id), ]
+  new_artists$genres <- sapply(new_artists$genres, genre_helper)
+  keep_cols <- c("id", "genres", "name", "popularity", "followers.total")
+  new_artists <- new_artists[,(names(new_artists) %in% keep_cols)]
+  return(new_artists[, c(2, 3, 4, 5, 1)])
+}
+
+# Changes the genres column from a list to a string separated by semi-colons.
+genre_helper <- function(genre){
+  if (length(genre) == 0) {
+    return(NA)
+  }
+  else {
+    return(paste(genre, collapse=";"))
+  }
+}
+
+#____________________________________________________
+#_____________________MAIN FILE______________________
+#____________________________________________________
+
+#_____________ARTIST DF
+
+# Read in billboard charts.
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+billboard_charts <- read.csv("billboard-charts.csv")
+billboard_charts <- billboard_charts[,!(names(billboard_charts) %in% c("X"))]
+
+# Get weeks from past decade
+most_recent_date <- as.Date(billboard_charts$week[1])
+num_years = 10
+num_weeks = num_years*52
+decade_ago_date <- most_recent_date - (7*num_weeks)
+decade_ago_date_index <- tail(which(billboard_charts$week == decade_ago_date), n = 1)
+
+print(paste("Most recent date is:", most_recent_date))
+print(paste("One decade ago:", decade_ago_date))
+
+# Slice billboard df to get up through decade_ago_date
+billboard_charts_slice <- billboard_charts %>% slice_head(n = decade_ago_date_index)
+print(paste("Sliced billboards. Week in top row:", head(billboard_charts_slice$week, 1)))
+print(paste("Sliced billboards. Week in bottom row:", tail(billboard_charts_slice$week, 1)))
+print(paste("Total number of rows:", NROW(billboard_charts_slice)))
+
+
+# 2017-08-26, 61 is blank. Delete blank artists (billboard problem).
+# Get information for all (valid) artists.
+artists <- unique(filter(billboard_charts_slice, artist != "")$artist)
+print(paste("Number of unique artists:", length(artists)))
+
+# For each artist, obtain their basic info.
+print(Sys.time())
+print("***Getting artist_df...***")
+artist_result <- map_df(artists, get_artist_df)
+print(Sys.time())
+print("***Done getting artist_df.***")
+
+# Manually add artists that were not found when searching.
+# Bobby Boris Pickett, Turnpike Troubadours, Brian Johnson, Jenn Johnson
+manual_adds <- c("42MRYPhQfcEXqb18dl5ERX", "1YSA4byX5AL1zoTsSTlB03", "7qTSoObqlJkIybERfumbQ9", "0cuW2lF0YWb9VUyHOnvnsO")
+manual_df <- map_df(manual_adds, get_artists)
+artist_result <- rbind(artist_result, manual_df)
+artist_result$genres <- sapply(artist_result$genres, genre_helper)
+print("Added manual additions.")
+
+keep_cols <- c("id", "genres", "name", "popularity", "followers.total")
+artist_df = artist_result[,(names(artist_result) %in% keep_cols)]
+artist_df <- artist_df[, c(2, 3, 4, 5, 1)]
+artist_df$type <- "billboard"
+artist_df <- artist_df %>% unique()
+
+artist_df_file_name <- paste("artist-df", most_recent_date, ".csv", sep = "_")
+
+#_____________COLLABORATION INFO
+
+# ONLY USE IF COLLABORATION-INFO RETRIEVAL FAILS
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# artist_df <- read.csv(artist_df_file)
+# artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
+
+# Get collaboration info
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+collab_file_name <- paste("collaboration-info", most_recent_date, ".csv", sep = "_")
+
+print(Sys.time())
+print("***Getting collaboration info...***")
+
+doneRetrieving <- FALSE
+while(doneRetrieving == FALSE){
+  # Does the collaboration file already exist?
+  if (file.exists(collab_file_name)){
+    collabs_so_far <- read_delim(collab_file_name, delim=',', escape_double=FALSE, escape_backslash=TRUE)
+    
+    # Check if the file is done.
+    last_id_collabs_artist <- slice_tail(collabs_so_far, n = 1)$id1
+    last_id_artist_df <- slice_tail(artist_df, n = 1)$id
+    
+    if (last_id_collabs_artist == last_id_artist_df){
+      doneRetrieving <- TRUE
+    } else {
+      # File not done. Pick up at next artist in artist_df.
+      id_index <- which(artist_df$id == last_id_collabs_artist)
+      artist_df_slice <- slice(artist_df, id_index+1:n())
+      lapply(artist_df_slice$id, get_collaborators)
+    }
+    
+  } else {
+    # Start from the top of artist_df.
+    lapply(artist_df$id, get_collaborators)
+  }
+}
+print(Sys.time())
+print("***Done getting collaboration info.***")
+
+collaboration_info <- read_delim(collab_file_name, delim=',', escape_double=FALSE, escape_backslash=TRUE)
+
+# Add total number of songs to artist_df and update the file.
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+total_num_songs <- data.frame(id = collaboration_info$id1, total_num_songs = collaboration_info$total_songs) %>% unique()
+artist_df <- left_join(artist_df, total_num_songs)
+write.csv(artist_df, artist_df_file_name)
+print(paste("Updated file:", artist_df_file_name))
+
+#__________________NEW ARTISTS
+
+# Read in collaborations and artist_df if any failures
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+# collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info") %>% tail(n = 1)
+# collaboration_info <- read.csv(collaboration_info_file)
+# collaboration_info <- collaboration_info[,!(names(collaboration_info) %in% c("X", "total_songs"))]
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# artist_df <- read.csv(artist_df_file)
+# artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
+
+collaborations <- filter(collaboration_info, id2 != "")
+edge_ids <- data.frame(source = collaborations$id1, target = collaborations$id2) %>% unique()
+
+# Get info about artists that aren't in artist_df from Spotify API.
+new <- setdiff(edge_ids$target, artist_df$id)
+new_artists <- get_new_artists(new)
+new_artists$type <- "non_billboard"
+
+new_artists <- mutate(new_artists, total_num_songs = NA)
+
+# Write new artist info to CSV.
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df")
+new_artists_file <- paste("new-artists", most_recent_date, ".csv", sep = "_")
+write.csv(new_artists, new_artists_file)

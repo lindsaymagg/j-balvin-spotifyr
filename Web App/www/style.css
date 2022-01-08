@@ -1,0 +1,53 @@
+body {
+  background-color: white;
+}
+
+p {
+  /* T R B L */
+  margin: 0px 50px 50px 50px; 
+  color: gray;
+  font-size: 18px;
+}
+
+.no-indent {
+  margin: 0px; 
+  color: blue;
+  font-size: 15px;
+}
+
+.caption {
+  margin: -45px 50px 25px 50px;
+  color: orange;
+  font-weight: italic;
+}
+
+.shiny-text-output {
+  /* T R B L */
+  margin: 0px 50px 25px 50px; 
+  color: purple;
+  font-size: 18px;
+}
+
+.net-text {
+  /* T R B L */
+  margin: 50px 50px 0px 50px; 
+  color: pink;
+  font-size: 18px;
+}
+
+h2 {
+  /* TB LR */
+  margin: 50px 50px;
+}
+
+
+h1{
+  margin: 50px 50px;
+}
+
+.p {
+  /* T R B L */
+  margin: 0px 50px 50px 50px; 
+  color: gray;
+  font-size: 18px;
+}
