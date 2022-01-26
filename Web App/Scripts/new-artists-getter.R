@@ -35,13 +35,13 @@ genre_helper <- function(genre){
 #____________________________________________________
 
 # Read in collaborations and artist_df.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
-collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info") %>% tail(n = 1)
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
+collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info") %>% tail(n = 1)
 collaboration_info <- read.csv(collaboration_info_file)
 collaboration_info <- collaboration_info[,!(names(collaboration_info) %in% c("X", "total_songs"))]
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
-artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
+artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 artist_df <- read.csv(artist_df_file)
 artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
 
@@ -53,7 +53,7 @@ new <- setdiff(edge_ids$target, artist_df$id)
 new_artists <- get_new_artists(new)
 new_artists$type <- "non_billboard"
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/new-artists-df")
 write.csv(new_artists, "new_artists_000TEST.csv")
 
 new_artists[is.na(new_artists)] <- 0

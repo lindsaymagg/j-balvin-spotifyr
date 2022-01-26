@@ -272,11 +272,11 @@ t <- list(
 
 # TRACKS
 # Open CSV containing information about all of J Balvin's released tracks (albums and singles) retrieved from Spotify API.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/jb-tracks-all")
-jb_tracks_all_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/jb-tracks-all") %>% tail(n = 1)
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/jb-tracks-all")
+jb_tracks_all_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/jb-tracks-all") %>% tail(n = 1)
 jb_tracks_all <- read.csv(jb_tracks_all_file)
 jb_tracks_all <- jb_tracks_all[,!(names(jb_tracks_all) %in% c("X"))]
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 
 # Label remixes and alternate versions of the same song as 'remixes' rather than singles or album tracks.
 # Mi Gente with Beyonce (0GzmMQizDeA2NVMUaZksv0, 5tSSdDqt0UvWXbxqRd9hTk, 1DoK3CdipMjplLk5LXUdcp, 0SjzIvde8QyAGeXwOgy9rs) and Sin Compromiso (feat. Jowell Y Randy) (0gHSFpCQZmZ1LwPHQpzn6T) should also be labeled as a remix.
@@ -341,12 +341,12 @@ collab_DT <- datatable(
 # NETWORK
 
 # Artist vertices
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-vertices")
-artist_vertices_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-vertices") %>% tail(n = 1)
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-vertices")
+artist_vertices_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-vertices") %>% tail(n = 1)
 artist_vertices <- read.csv(artist_vertices_file)
 artist_vertices <- artist_vertices[,!(names(artist_vertices) %in% c("X"))]
 artist_vertices_date <- str_split(artist_vertices_file, "_")[[1]][2]
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 
 # Add columns with genres.
 index <- which(artist_vertices$name == target_artist_name)
@@ -373,11 +373,11 @@ artist_vertices_DT <- datatable(
 )
 
 # Create network
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
 collaboration_info_file <- paste("collaboration-info", artist_vertices_date, ".csv", sep = "_")
 collaboration_info <- read_delim(collaboration_info_file, delim=',', escape_double=FALSE, escape_backslash=TRUE)
 collaborations <- filter(collaboration_info, id2 != "")
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 
 edge_ids <- data.frame(source = collaborations$id1, target = collaborations$id2) %>% unique()
 artist_network <- graph_from_data_frame(d=unique(edge_ids), vertices = unique(artist_vertices), directed = FALSE)

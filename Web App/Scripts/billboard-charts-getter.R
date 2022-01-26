@@ -36,7 +36,7 @@ get_week <- function(week){
 #_____________________MAIN FILE______________________
 #____________________________________________________
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 
 # If there's already a billboard file, load it and only get new dates.
 if (file.exists("billboard-charts.csv")){

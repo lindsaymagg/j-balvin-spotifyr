@@ -134,7 +134,7 @@ genre_helper <- function(genre){
 #_____________ARTIST DF
 
 # Read in billboard charts.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 billboard_charts <- read.csv("billboard-charts.csv")
 billboard_charts <- billboard_charts[,!(names(billboard_charts) %in% c("X"))]
 
@@ -186,13 +186,13 @@ artist_df_file_name <- paste("artist-df", most_recent_date, ".csv", sep = "_")
 #_____________COLLABORATION INFO
 
 # ONLY USE IF COLLABORATION-INFO RETRIEVAL FAILS
-# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
-# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 # artist_df <- read.csv(artist_df_file)
 # artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
 
 # Get collaboration info
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
 collab_file_name <- paste("collaboration-info", most_recent_date, ".csv", sep = "_")
 
 print(Sys.time())
@@ -228,7 +228,7 @@ print("***Done getting collaboration info.***")
 collaboration_info <- read_delim(collab_file_name, delim=',', escape_double=FALSE, escape_backslash=TRUE)
 
 # Add total number of songs to artist_df and update the file.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
 total_num_songs <- data.frame(id = collaboration_info$id1, total_num_songs = collaboration_info$total_songs) %>% unique()
 artist_df <- left_join(artist_df, total_num_songs)
 write.csv(artist_df, artist_df_file_name)
@@ -237,12 +237,12 @@ print(paste("Updated file:", artist_df_file_name))
 #__________________NEW ARTISTS
 
 # Read in collaborations and artist_df if any failures
-# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
-# collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info") %>% tail(n = 1)
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
+# collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info") %>% tail(n = 1)
 # collaboration_info <- read.csv(collaboration_info_file)
 # collaboration_info <- collaboration_info[,!(names(collaboration_info) %in% c("X", "total_songs"))]
-# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
-# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 # artist_df <- read.csv(artist_df_file)
 # artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
 
@@ -257,6 +257,6 @@ new_artists$type <- "non_billboard"
 new_artists <- mutate(new_artists, total_num_songs = NA)
 
 # Write new artist info to CSV.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/new-artists-df")
 new_artists_file <- paste("new-artists", most_recent_date, ".csv", sep = "_")
 write.csv(new_artists, new_artists_file)

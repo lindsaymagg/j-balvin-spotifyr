@@ -35,19 +35,19 @@ contains_certain_genre <- function(row, specific_genres){
 #________________ARTIST VERTICES________________
 
 # Read in collaborations, artist_df, and new_artists.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
 collaboration_info_file <- 
   list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info") %>% tail(n = 1)
 collaboration_info <- read_delim(collaboration_info_file, delim=',', escape_double=FALSE, escape_backslash=TRUE)
 collaboration_info <- collaboration_info[,!(names(collaboration_info) %in% c("X"))]
 setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
 artist_df_file <- 
-  list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+  list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 artist_df <- read.csv(artist_df_file)
 artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/new-artists-df")
 new_artists_file <- 
-  list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df") %>% tail(n = 1)
+  list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/new-artists-df") %>% tail(n = 1)
 new_artists <- read.csv(new_artists_file)
 new_artists <- new_artists[,!(names(new_artists) %in% c("X"))]
 
@@ -94,7 +94,7 @@ artist_vertices$betweenness <- betweenness(artist_network)
 artist_vertices$eigenvector <- evcent(artist_network)$vector
 
 # Write artist_vertices file.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-vertices")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-vertices")
 artist_vertices_date <- str_split(artist_df_file, "_")[[1]][2]
 artist_vertices_file_name <- paste("artist-vertices", artist_vertices_date, ".csv", sep = "_")
 #write.csv(artist_vertices, artist_vertices_file_name)
@@ -104,7 +104,7 @@ artist_vertices_file_name <- paste("artist-vertices", artist_vertices_date, ".cs
 #________PLAIN
 seedy <- 26
 set.seed(seedy)
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/www/plain-network")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/www/plain-network")
 plain_file_name <- paste("artist-network", artist_vertices_date, ".jpg", sep = "_")
 jpeg(file = plain_file_name, width = 2000, height = 2000)
 plot.igraph(artist_network, vertex.size = 1, edge.color = 'black', vertex.color = 'black', vertex.label="", vertex.frame.color = NA, edge.width = .075)
@@ -117,7 +117,7 @@ my_legend <- levels(as.factor(V(artist_network)$main_genre))
 V(artist_network)$color <- main_genre_color
 
 V(artist_network)$size <- ((V(artist_network)$popularity) **2)/5000
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/www/color-network")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/www/color-network")
 color_file_name <- paste("artist-network-color", artist_vertices_date, "popularity", ".jpg", sep = "_")
 jpeg(file = paste(color_file_name), width = 2000, height = 2000)
 plot.igraph(artist_network, 
@@ -135,7 +135,7 @@ set.seed(seedy)
 my_legend <- levels(as.factor(V(artist_network)$main_genre))
 V(artist_network)$color <- main_genre_color
 V(artist_network)$size <- ((artist_vertices$degree)+50)/80
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/www/color-network")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/www/color-network")
 color_file_name <- paste("artist-network-color", artist_vertices_date, "degree", ".jpg", sep = "_")
 jpeg(file = paste(color_file_name), width = 2000, height = 2000)
 plot.igraph(artist_network, 

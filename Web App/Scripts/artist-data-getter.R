@@ -129,7 +129,7 @@ genre_helper <- function(genre){
 #__________________ARTIST DF_______________________
 
 # Read in billboard charts.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App")
 billboard_charts <- read.csv("billboard-charts.csv")
 billboard_charts <- billboard_charts[,!(names(billboard_charts) %in% c("X"))]
 
@@ -177,7 +177,7 @@ artist_df$type <- "billboard"
 artist_df <- artist_df %>% unique()
 
 # Write artist_df file.
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
 artist_df_date <- Sys.Date()
 artist_df_file_name <- paste("artist-df", artist_df_date, ".csv", sep = "_")
 write.csv(artist_df, file_name)
@@ -186,7 +186,7 @@ print("Wrote artist_df file.")
 #__________COLLABORATION INFO____________
 
 # ONLY USE IF COLLABORATION-INFO RETRIEVAL FAILS
-# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 # artist_df <- read.csv(artist_df_file)
 # artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
 
@@ -197,11 +197,11 @@ collaboration_info <- map_df(artist_df$id, get_collaborators)
 print(Sys.time())
 print("***Done getting collaboration info.***")
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
 collab_file_name <- paste("collaboration-info", artist_df_date, sep = "_")
 write.csv(collaboration_info, collab_file_name)
 print(paste("Wrote collab info to file:", collab_file_name))
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
 
 # Add total number of songs to artist_df and update the file.
 total_num_songs <- data.frame(id = collaboration_info$id1, total_num_songs = collaboration_info$total_songs) %>% unique()
@@ -214,13 +214,13 @@ print(paste("Updated file:", artist_df_file_name))
 #________________NEW ARTISTS________________
 
 # Read in collaborations and artist_df if any failures occurred.
-# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info")
-# collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/collaboration-info") %>% tail(n = 1)
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info")
+# collaboration_info_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/collaboration-info") %>% tail(n = 1)
 # collaboration_info <- read.csv(collaboration_info_file)
 # collaboration_info <- collaboration_info[,!(names(collaboration_info) %in% c("X", "total_songs"))]
 # 
-# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df")
-# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/artist-df") %>% tail(n = 1)
+# setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df")
+# artist_df_file <- list.files("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/artist-df") %>% tail(n = 1)
 # artist_df <- read.csv(artist_df_file)
 # artist_df <- artist_df[,!(names(artist_df) %in% c("X"))]
 
@@ -240,7 +240,7 @@ new_artists$type <- "non_billboard"
 new_artists[is.na(new_artists)] <- 0
 new_artists <- mutate(new_artists, total_num_songs = NA)
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/new-artists-df")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/new-artists-df")
 new_artists_date <- str_split(artist_df_file, "_")[[1]][2]
 
 # Write new artist info to CSV for later use.

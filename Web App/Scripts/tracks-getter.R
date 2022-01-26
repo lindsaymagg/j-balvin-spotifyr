@@ -29,6 +29,6 @@ print("Got popularity.")
 file_name <- paste("jb-tracks-all", Sys.Date(), ".csv", sep = "_")
 print(paste("File name:", file_name))
 
-setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/jb-tracks-all")
+setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/j-balvin-spotifyr/Web App/jb-tracks-all")
 write.csv(jb_tracks_all, file_name)
 print("Completed.")
