@@ -1,7 +1,6 @@
 library(shiny)
 library(plotly)
 library(DT)
-# ESKETIT
 
 shinyUI(fluidPage(
   tags$head(includeCSS("www/style.css")),
