@@ -33,6 +33,64 @@ library(forcats)
 #HELPER FUNCTIONS___________________________________________________________________________________________
 #___________________________________________________________________________________________________________
 
+# This function gets rid of duplicate tracks by either preserving "albums" (keeping albums together and deleting duplicate tracks released as singles) or by choosing the first time the song was released "date"
+tracks_helper <- function(jb_tracks, preserve_what){
+  
+  # Get popularities
+  tracks_popularity <- jb_tracks %>% arrange(track_name, -track_popularity) %>% distinct(tolower(track_name), .keep_all = TRUE)
+  
+  # Get rid of duplicates by preserving either release date or albums
+  tracks_ordered <- {
+    if (preserve_what == "album") {
+      # Keep albums together
+      jb_tracks %>% arrange(track_name, album_type, album_name, album_release_date) %>% distinct(tolower(track_name), .keep_all = TRUE)
+    } else {
+      # Prioritize first song released
+      jb_tracks %>% arrange(desc(track_name), as.Date(album_release_date)) %>% distinct(tolower(track_name), .keep_all = TRUE)
+    }
+  }
+  
+  # Merge together
+  tracks_full <- left_join(tracks_ordered, tracks_popularity, by = "tolower(track_name)")
+  
+  # Drop repetitive columns
+  tracks_full <- tracks_full[,!(names(tracks_full) %in% c("tolower(track_name)", "album_type.y", "album_release_date.y", "album_release_year.y", "danceability.y", "energy.y", "key.y", "speechiness.y", "valence.y", "track_id.y", "artists.y", "artist_ids.y", "duration_ms.y", "track_name.y", "album_name.y", "mode_name.y", "key_mode.y", "track_number.y", "tempo.y", "track_popularity.x"))]
+  
+  # Manually drop additional duplicates: 
+  # Mi Gente - F4ST, Velza & Loudness Remix, Mi Gente Feat. Beyoncé, Que Calor - Saweetie Remix, Que Calor (with J Balvin & El Alfa), RITMO (Bad Boys For Life) - Rosabel Dub Remix, Roses (Imanbek Remix) [Latino Gang], Roses - Imanbek Remix [Latino Gang], Ven y Hazlo Tú, X (Remix), Bum Bum Tam Tam - Jonas Blue Extended Mix, Hey Ma (feat. Camila Cabello), Hey Ma (with J Balvin & Pitbull feat. Camila Cabello), UN DIA (Feat. Tainy), Ven y Hazlo Tú, Que Calor, Hey Ma, Hey Ma, La Venganza, La Venganza
+  duplicates <- c("3Oo7GUPSn3Nvdi4XBBhHyv", "5tSSdDqt0UvWXbxqRd9hTk", "2bUeGVkbuz2uJNBmHkNVhY", "1G2CAJeP7rCwOZjlSJ0Zw3", "6kBhyF31wa4Dt0Pt733vth", "03fb0nlJGQBTybCb71ZW2R", "2zJ2jLVDrl1tfMZkR89j4k", "46F5O39iDmdRuwRAS7KR6B", "5cZaDnYFu5FjuMLucBH7vO", "23cixn3e6AcLz2G3ujfMEJ", "05OzEk1HeSYwVE2byVkKbU", "7ggff9uRIDrDelWpwlUhSs", "5lsttfyShVGIdbbBsy83xt", "1sviDBcAqVOxMXq4xITVEs", "3mVEHig1Fn5MAqZLBeZOuu", "44w99ojqUCx9s1NXBpx7VW", "6Q0YxsP9Rne0Tn2xQCRE5W", "5YRpDfCCBCNAKDGIlBODbU", "0Pe4DpJDmZtOybHgrZ1hyM")
+  
+  if (preserve_what == "album"){
+    duplicates <- duplicates %>% append("0EhpEsp4L0oRGM0vmeaN5e")
+  } else {
+    duplicates <- duplicates %>% append("66x45Yh9x397PWpxMX0ZDT")
+  }
+  
+  
+  tracks <- tracks_full %>% filter(!track_id.x %in% duplicates) %>% arrange(-album_release_year.x)
+  
+  # Clean column names
+  names(tracks) = gsub(pattern = "\\.x", replacement = "", x = names(tracks))
+  names(tracks) = gsub(pattern = "\\.y", replacement = "", x = names(tracks))
+  
+  # There are two unique songs called La Venganza. We need to re-insert both.
+  la_venganza_familia = subset(jb_tracks, track_id == "5YRpDfCCBCNAKDGIlBODbU")
+  la_venganza_jose = subset(jb_tracks, track_id == "0Pe4DpJDmZtOybHgrZ1hyM")
+  tracks <- rbind(tracks,la_venganza_familia) %>% rbind(la_venganza_jose)
+  tracks <- tracks %>% arrange(desc(album_release_date), desc(track_number))
+  
+  col_order <- c("track_name", "album_name",
+                 "album_release_year", "album_type", "track_popularity", "duration_ms", "tempo", "valence", "energy", "danceability", "speechiness", "mode_name", "key_mode", "key", "artist_ids", "artists", "track_id", "album_release_date")
+  tracks <- tracks[, col_order]
+  
+  # Add Jowell y Randy as artists of Sin Compromiso w Jowell y Randy
+  sincomp_index <- which(tracks$track_id == "0gHSFpCQZmZ1LwPHQpzn6T")
+  tracks[sincomp_index,]$artist_ids <- "4IMAo2UQchVFyPH24PAjUs;1vyhD5VmyZ7KMfW5gqLgo5"
+  tracks[sincomp_index,]$artists <- "Jowell & Randy;J Balvin"
+  
+  return(tracks)
+}
+
 # Gets J Balvin's collaborations.
 get_collaborators_artist <- function(artist_id, artist_name, artist_tracks){
   
@@ -180,6 +238,24 @@ get_genres <- function(genre_string){
   return(genres)
 }
 
+# Helper function to prepare dataframe for flattening (genres by year)
+flatten_artists <- function(single_genre_df){
+  split_df_yr <- split(single_genre_df, f = single_genre_df$year)
+  new_df <- map_df(split_df_yr, flatten_artists_2)
+  return(new_df)
+}
+
+# Helper function to change format of dataframe, flatten all artists for a given genre into one row  (genres by year)
+flatten_artists_2 <- function(df){
+  genre <- unique(df$genre)
+  year <- unique(df$year)
+  unique_artists <- sort(unique(df$collaborator))
+  artists <- (paste(unique_artists, collapse="\n"))
+  num_artists <- length(unique_artists)
+  new_df <- data.frame(genre = genre, year = year, num_artists = num_artists, artists = artists)
+  return(new_df)
+}
+
 #___________________________________________________________________________________________________________
 #DATA PROCESSING____________________________________________________________________________________________
 #___________________________________________________________________________________________________________
@@ -190,6 +266,10 @@ remix_color = "#00BA38"
 single_color = "#619CFF"
 album_color = "#F8766D"
 
+t <- list(
+  family = "Helvetica",
+  size = 14)
+
 # TRACKS
 # Open CSV containing information about all of J Balvin's released tracks (albums and singles) retrieved from Spotify API.
 setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App/jb-tracks-all")
@@ -199,8 +279,8 @@ jb_tracks_all <- jb_tracks_all[,!(names(jb_tracks_all) %in% c("X"))]
 setwd("/Users/lindsaymaggioncalda/Documents/J Balvin Project/Web App")
 
 # Label remixes and alternate versions of the same song as 'remixes' rather than singles or album tracks.
-# Mi Gente with Beyonce (0GzmMQizDeA2NVMUaZksv0) and Sin Compromiso (feat. Jowell Y Randy) (0gHSFpCQZmZ1LwPHQpzn6T) should also be labeled as a remix.
-label_as_remix <- c("0GzmMQizDeA2NVMUaZksv0", "0gHSFpCQZmZ1LwPHQpzn6T")
+# Mi Gente with Beyonce (0GzmMQizDeA2NVMUaZksv0, 5tSSdDqt0UvWXbxqRd9hTk, 1DoK3CdipMjplLk5LXUdcp, 0SjzIvde8QyAGeXwOgy9rs) and Sin Compromiso (feat. Jowell Y Randy) (0gHSFpCQZmZ1LwPHQpzn6T) should also be labeled as a remix.
+label_as_remix <- c("0GzmMQizDeA2NVMUaZksv0", "0gHSFpCQZmZ1LwPHQpzn6T", "5tSSdDqt0UvWXbxqRd9hTk", "1DoK3CdipMjplLk5LXUdcp", "0SjzIvde8QyAGeXwOgy9rs")
 is_remix <- grepl('remix', tolower(jb_tracks_all$track_name)) | grepl('dub', tolower(jb_tracks_all$track_name)) | grepl('edit', tolower(jb_tracks_all$track_name)) | (grepl('mix', tolower(jb_tracks_all$track_name)) & !grepl('mixtape volume 1', tolower(jb_tracks_all$track_name))) | grepl('version', tolower(jb_tracks_all$track_name)) | grepl('acappella', tolower(jb_tracks_all$track_name)) | grepl('spanglish', tolower(jb_tracks_all$track_name)) | grepl('instrumental', tolower(jb_tracks_all$track_name)) | (jb_tracks_all$track_id %in% label_as_remix)
 is_single <- grepl('single', jb_tracks_all$album_type)
 is_album <- grepl('album', jb_tracks_all$album_type)
@@ -208,35 +288,24 @@ jb_tracks_all$album_type <- case_when(is_remix ~ 'remix',
                                       is_single ~ 'single',
                                       is_album ~ 'album')
 
-# Get rid of duplicate tracks (some songs are simply listed more than once on Spotify).
-# For duplicate songs with the exact same name, I want the MAXIMUM popularity and the ALBUM version (if there is one). Singles come out before albums, so I can take the LATER of the duplicates.
+# Delete songs that do not exist on Spotify (Tranquila listed as a song on Energía..., Mi Gente - Mariciano Remix, Bum Bum Tam Tam Jonas Blue Extended Mix) 
+nonexistent <- c("2tm6ZO4t9MoDVvnZyY1hDt", "4ItohW9QW9ImmP8aGmt9sh", "3JD39Mvo447EhbkgaZ1Vbz")
+jb_tracks_all <- jb_tracks_all %>% filter(track_id %in% nonexistent == FALSE)
 
-jb_tracks <- jb_tracks_all
+# Get rid of duplicate tracks (some songs are simply listed more than once on Spotify). How you do this depends on whether you want to keep the first-released version of the song or the album-version.
+jb_tracks_preserve_albums <- tracks_helper(jb_tracks_all, "album")
+jb_tracks_preserve_release_date <- tracks_helper(jb_tracks_all, "release_date")
 
-# Choose albums
-jb_tracks_albums <- jb_tracks %>% arrange(track_name, album_type, album_name) %>% distinct(tolower(track_name), .keep_all = TRUE)
+jb_tracks <- jb_tracks_preserve_albums
 
-# Choose popularity
-jb_tracks_popularity <- jb_tracks %>% arrange(track_name, -track_popularity) %>% distinct(tolower(track_name), .keep_all = TRUE)
-
-# Merge together
-jb_tracks_full <- left_join(jb_tracks_albums, jb_tracks_popularity, by = "tolower(track_name)")
-# Drop repetitive columns
-jb_tracks_full <- jb_tracks_full[,!(names(jb_tracks_full) %in% c("tolower(track_name)", "album_type.y", "track_number.y", "album_release_date.y", "album_release_year.y", "danceability.y", "energy.y", "key.y", "speechiness.y", "valence.y", "track_id.y", "artists.y", "artist_ids.y", "duration_ms.y", "track_name.y", "album_name.y", "mode_name.y", "key_mode.y", "tempo.y", "track_popularity.x"))]
-
-# Manually drop additional duplicates: 
-# Mi Gente - F4ST, Velza & Loudness Remix, Mi Gente Feat. Beyoncé, Que Calor - Saweetie Remix, Que Calor (with J Balvin & El Alfa), RITMO (Bad Boys For Life) - Rosabel Dub Remix, Roses (Imanbek Remix) [Latino Gang], Roses - Imanbek Remix [Latino Gang], Ven y Hazlo Tú, X (Remix), Bum Bum Tam Tam - Jonas Blue Extended Mix, Hey Ma (feat. Camila Cabello), Hey Ma (with J Balvin & Pitbull feat. Camila Cabello), UN DIA (Feat. Tainy), Ven y Hazlo Tú, Que Calor
-duplicates <- c("3Oo7GUPSn3Nvdi4XBBhHyv", "5tSSdDqt0UvWXbxqRd9hTk", "2bUeGVkbuz2uJNBmHkNVhY", "1G2CAJeP7rCwOZjlSJ0Zw3", "6kBhyF31wa4Dt0Pt733vth", "03fb0nlJGQBTybCb71ZW2R", "2zJ2jLVDrl1tfMZkR89j4k", "46F5O39iDmdRuwRAS7KR6B", "5cZaDnYFu5FjuMLucBH7vO", "23cixn3e6AcLz2G3ujfMEJ", "05OzEk1HeSYwVE2byVkKbU", "7ggff9uRIDrDelWpwlUhSs", "0EhpEsp4L0oRGM0vmeaN5e", "5lsttfyShVGIdbbBsy83xt", "1sviDBcAqVOxMXq4xITVEs")
-jb_tracks <- jb_tracks_full %>% filter(!track_id.x %in% duplicates) %>% arrange(-album_release_year.x)
-
-# Clean column names
-names(jb_tracks) = gsub(pattern = "\\.x", replacement = "", x = names(jb_tracks))
-names(jb_tracks) = gsub(pattern = "\\.y", replacement = "", x = names(jb_tracks))
-jb_tracks <- jb_tracks %>% arrange(desc(album_release_date), desc(track_number))
-
-col_order <- c("track_name", "album_name",
-               "album_release_year", "album_type", "track_popularity", "duration_ms", "tempo", "valence", "energy", "danceability", "speechiness", "mode_name", "key_mode", "key", "artist_ids", "artists", "track_id")
-jb_tracks <- jb_tracks[, col_order]
+all_tracks_DT <- datatable(
+  jb_tracks, caption = paste("All tracks released on Spotify by J Balvin (excluding duplicate songs released on separate albums)"), extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    pageLength = 5,
+    scrollX = TRUE,
+    buttons = c('csv')
+  )
+)
 
 
 # ALBUMS
@@ -319,7 +388,7 @@ num_1 <- connected_components$csize[connected_components$csize == 1]
 num_1_to_4 <- connected_components$csize[connected_components$csize %in% c(1,2,3,4)]
 
 networkClusterText1 <- paste(NROW(artist_vertices %>% filter(type == "billboard")),
-                            " artists have made it onto the Billboard Artist Top 100 in the past decade. After finding all of their collaborations using Spotify, the network contains ",
+                            " artists have made it onto the Billboard Artist Top 100 in the past decade. After finding all of their collaborations using the Spotify API and adding the collaborators to the graph, the network contains ",
                             NROW(artist_vertices), " vertices and ", NROW(edge_ids),
                             " edges.", sep = "")
 
@@ -327,13 +396,13 @@ networkClusterText2 <- paste("There are ", length(connected_components$csize),
                              " distinct components of the graph. The largest component contains ",
                              format(max(connected_components$csize), scientific=F),
                              " artists, or ", round(max(connected_components$csize)/NROW(artist_vertices)*100,2),
-                             "% of the artists, while the second largest cluster has only ",
+                             "% of the artists, while the second largest component has only ",
                              Rfast::nth(connected_components$csize, 2, descending = T),
-                             " artists. ", length(num_1), " clusters (",
+                             " artists. ", length(num_1), " components (",
                              round(length(num_1)/length(connected_components$csize)*100, 2),
-                             "% of the clusters) comprise only 1 artist. ", length(num_1_to_4),
-                             " clusters (", round(length(num_1_to_4)/length(connected_components$csize)*100,2),
-                             "% of the clusters) connect up to 4 artists.", sep = "")
+                             "% of the components) comprise only 1 artist. ", length(num_1_to_4),
+                             " components (", round(length(num_1_to_4)/length(connected_components$csize)*100,2),
+                             "% of the components) connect up to 4 artists.", sep = "")
 
 #___________________________________________________________________________________________________________
 #SERVER_____________________________________________________________________________________________________
@@ -344,22 +413,16 @@ shinyServer(function(input, output, session) {
   #TRACKS_____________________________________________________________________________________________________
   
   # The table holding information about all of J Balvin's released tracks on Spotify.
-  output$all_tracks_DT <- DT::renderDataTable(DT::datatable(
-    jb_tracks, caption = paste("All tracks released on Spotify by J Balvin (excluding duplicate songs released on separate albums)"), extensions = 'Buttons', options = list(
-      dom = 'Bfrtip',
-      pageLength = 5,
-      scrollX = TRUE,
-      buttons = c('csv')
-    )
-  ))
+  output$all_tracks_DT <- DT::renderDataTable(all_tracks_DT)
   
   #________________# NUMBER OF RELEASED TRACKS
   
-  output$totalnumsongs <- renderText("J Balvin has released 232 unique songs (this number includes remixes and different versions of the same song).")
-  output$totalnumsongsnoremix <- renderText("J Balvin has released 148 unique original songs (this excludes remixes and versions of the same song).")
+  output$totalnumsongs <- renderText(paste("J Balvin has released ", NROW(jb_tracks), " unique songs (all songs)."))
+  output$totalnumsongsnoremix <- renderText(paste("J Balvin has released ", NROW(jb_tracks %>% filter(album_type != "remix")), " unique original songs (only single/album releases)."))
   
   types_chosen_numtracks <- reactive(input$type_choice_numtracks)
   types_chosen_key <- reactive(input$type_choice_key)
+  should_preserve_albums <- reactive(input$preserve_albums_check)
 
   output$numreleasedtracks <- renderPlotly({
     
@@ -390,8 +453,16 @@ shinyServer(function(input, output, session) {
       }
     }
     
+    tracks_preserved <- {
+      if (should_preserve_albums() == FALSE){
+        jb_tracks_preserve_release_date
+      } else {
+        jb_tracks
+      }
+    }
+    
     # Group by album year and album type to find how many tracks were released per year and what kind of release it was (album, single, or remix).
-    num_tracks <- reactive(jb_tracks %>% filter(album_type %in% types_chosen_numtracks()) %>%
+    num_tracks <- reactive(tracks_preserved %>% filter(album_type %in% types_chosen_numtracks()) %>%
       group_by(album_release_year, album_type, track_name) %>%
       dplyr::summarize(num_tracks = n()))
 
@@ -400,12 +471,14 @@ shinyServer(function(input, output, session) {
       geom_bar(color = 'white')+
       ggtitle("Number of Tracks Released by Year")+
       theme_minimal()+
-      scale_y_continuous(breaks=seq(0,NROW(jb_tracks),5))+
+      theme(plot.title = element_text(hjust = 0.5))+
+      scale_y_continuous(breaks=seq(0,NROW(tracks_preserved),5))+
+      scale_x_continuous(breaks=seq(min(tracks_preserved$album_release_year), max(tracks_preserved$album_release_year), 1))+
       scale_fill_manual(values=colors, name = "Type\nof Release")
     num_released_tracks_plotly <- ggplotly(num_released_tracks_gg, source = "select", 
                                            tooltip = c("track_name")) %>% layout(legend = list(itemdoubleclick = FALSE))
 
-    num_released_tracks_plotly
+    num_released_tracks_plotly %>% layout(font=t)
     })
   
   #________________# KEY OF RELEASED TRACKS
@@ -447,13 +520,13 @@ shinyServer(function(input, output, session) {
     # Plot the number of tracks released per key.
     key_of_tracks_gg <- ggplot(key(), aes_string(fill = "factor(album_type, c('remix','single','album'))", x="reorder(key_mode, num_tracks, sum)", y="num_tracks", track_name = "track_name"))+
       geom_bar(stat='identity', color = "white", width = .5)+
-      labs(title="Key of J Balvin's Songs (All Tracks)",
+      labs(title=" ",
            x ="Key", y = "Number of songs")+
       theme_minimal()+
       scale_y_continuous(breaks=seq(0,NROW(jb_tracks),5))+
       scale_fill_manual(values=colors, name = "Type\nof Release")+
       coord_flip()
-    key_of_tracks_plotly <- ggplotly(key_of_tracks_gg, tooltip = c("track_name"))
+    key_of_tracks_plotly <- ggplotly(key_of_tracks_gg, tooltip = c("track_name")) %>% layout(font=t)
   })
   
   #______# Coord graph
@@ -474,7 +547,7 @@ shinyServer(function(input, output, session) {
   output$x_description <- renderUI({
     switch(input$x_axis_choice,
            track_length = HTML("<p class = 'no-indent'>The duration of a track in minutes.</p>"),
-           valence = HTML("<p class = 'no-indent'>Valence is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
+           valence = HTML("<p class = 'no-indent'>Positivity (which the Spotify API calls valence) is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            energy = HTML("<p class = 'no-indent'>Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            danceability = HTML("<p class = 'no-indent'>Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            speechiness = HTML("<p class = 'no-indent'>Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>")
@@ -484,7 +557,7 @@ shinyServer(function(input, output, session) {
   output$y_description <- renderUI({
     switch(input$y_axis_choice,
            track_length = HTML("<p class = 'no-indent'>The duration of a track in minutes.</p>"),
-           valence = HTML("<p class = 'no-indent'>Valence is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
+           valence = HTML("<p class = 'no-indent'>Positivity (which the Spotify API calls valence) is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            energy = HTML("<p class = 'no-indent'>Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            danceability = HTML("<p class = 'no-indent'>Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            speechiness = HTML("<p class = 'no-indent'>Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>")
@@ -514,7 +587,8 @@ shinyServer(function(input, output, session) {
       #scale_y_continuous(breaks=seq(0, 1, .25))+
       labs(title = "",
            y = y_choice,
-           x = x_choice)+
+           x = x_choice,
+           col = " ")+
       scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
       scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
       facet_wrap(~get(group_by_choice), nrow=num_row)+
@@ -539,7 +613,8 @@ shinyServer(function(input, output, session) {
       #scale_y_continuous(breaks=seq(0, 1, .25))+
       labs(title = "",
            y = y_choice,
-           x = x_choice)+
+           x = x_choice,
+           col = " ")+
       scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
       scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
       geom_hline(yintercept=.5, size = .25)+
@@ -548,7 +623,7 @@ shinyServer(function(input, output, session) {
     
     ggplotly(single_coord_plot, tooltip = c("track_name", "track_popularity")) %>% layout(
       xaxis = list(range = c(0, 1), rangemode = "tozero"),
-      yaxis = list(range = c(0, 1), rangemode = "tozero"))
+      yaxis = list(range = c(0, 1), rangemode = "tozero")) %>% layout(font=t)
     
   }
   
@@ -566,17 +641,18 @@ shinyServer(function(input, output, session) {
     )
   ))
   
-  which_albums <- reactive({
-    switch(input$radio_album,
-           only_og = albums_only_og,
-           only_all = albums_only_all
-    )
-  })
   
   # FIX THIS: add total number of unique songs across all albums.
   #output$album_num_songs_text <- renderText(paste(artist_name, " released a total of ", NROW(albums_only_og), " songs on his original albums: J Balvin Mix Tape, La Familia, Energía, Vibras, OASIS, Colores, and JOSE.", sep = ""))
   
   #________________# NUM TRACKS PER ALBUM
+  
+  which_albums <- reactive({
+    switch(input$radio_album_num,
+           only_og = albums_only_og,
+           only_all = albums_only_all
+    )
+  })
   
   output$numtrackseachalbum <- renderPlotly({
     # Group by album to find the total number of songs of each album.
@@ -590,23 +666,30 @@ shinyServer(function(input, output, session) {
       aes(x = fct_reorder(album_name, album_release_year, .desc = TRUE))+
       theme_minimal()+
       scale_y_continuous(breaks=seq(0,NROW(jb_tracks),5))+
-      labs(title = "Number of Tracks on J Balvin's Albums",
+      labs(title = "",
            y = "Total Number of Tracks",
            x = "Album")+
       coord_flip()
     
     album_num_tracks_plotly <- ggplotly(album_num_tracks_gg, tooltip = c("track_name"))
-    album_num_tracks_plotly
+    album_num_tracks_plotly %>% layout(font=t)
   })
   
   #________________# DURATION OF ALBUM
   
+  which_albums_dur <- reactive({
+    switch(input$radio_album_dur,
+           only_og = albums_only_og,
+           only_all = albums_only_all
+    )
+  })
+  
   output$lengtheachalbum <- renderPlotly({
     # Group by album to find the total duration of each album.
-    song_durations <- which_albums() %>%
+    song_durations <- which_albums_dur() %>%
       group_by(album_name, album_release_year, track_name) %>%
       dplyr::summarize(total_duration = sum(duration_ms)/60000) %>% arrange(album_release_year)
-    album_durations <- which_albums() %>%
+    album_durations <- which_albums_dur() %>%
       group_by(album_name, album_release_year) %>%
       dplyr::summarize(total_duration = sum(duration_ms)/60000) %>% arrange(album_release_year)
     
@@ -622,19 +705,26 @@ shinyServer(function(input, output, session) {
       scale_y_continuous(breaks=seq(0,300,10))+
       coord_flip()+
       theme_minimal()+
-      labs(title = "Total Duration of J Balvin's Albums",
+      labs(title = "",
            y = "Total Duration (min)",
            x = "Album")
     length_albums_plotly <- ggplotly(length_albums_gg, tooltip = c("track_name", "track_duration_min"))
-    length_albums_plotly
+    length_albums_plotly %>% layout(font=t)
   })
   
   #________________# TRACK LENGTH ON ALBUM
   
+  which_albums_att <- reactive({
+    switch(input$radio_album_att,
+           only_og = albums_only_og,
+           only_all = albums_only_all
+    )
+  })
+  
   which_attribute_text <- reactive({
     switch(input$attribute_choice,
            track_length = "Track Length (min)",
-           valence = "Valence",
+           valence = "Positivity",
            energy = "Energy",
            danceability = "Danceability",
            speechiness = "Speechiness"
@@ -644,7 +734,7 @@ shinyServer(function(input, output, session) {
   output$attribute_description <- renderUI({
     switch(input$attribute_choice,
            track_length = HTML("<p class = 'no-indent'>The duration of a track in minutes.</p>"),
-           valence = HTML("<p class = 'no-indent'>Valence is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
+           valence = HTML("<p class = 'no-indent'>Positivity (which the Spotify API calls valence) is a measure from 0.0 to 1.0 that describes the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry) (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            energy = HTML("<p class = 'no-indent'>Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            danceability = HTML("<p class = 'no-indent'>Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>"),
            speechiness = HTML("<p class = 'no-indent'>Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks (<a href='https://developer.spotify.com/documentation/web-api/reference/#category-tracks'>Spotify API documentation</a>)</p>")
@@ -660,11 +750,11 @@ shinyServer(function(input, output, session) {
   
   output$attributeplot <- renderPlotly({
     
-    albums_in_order <- unique((which_albums()[order(which_albums()$album_release_year),])$album_name)
+    albums_in_order <- unique((which_albums_att()[order(which_albums_att()$album_release_year),])$album_name)
     xform <- list(categoryorder = "array",
                   categoryarray = albums_in_order)
     
-    albums_track_dur <- mutate(which_albums(), duration_min = round(duration_ms/60000,2))
+    albums_track_dur <- mutate(which_albums_att(), duration_min = round(duration_ms/60000,2))
     
     # Track Length
     # Plot each album's songs and their durations, and show the average length per album, excluding Mixtape Volume 1.
@@ -694,7 +784,7 @@ shinyServer(function(input, output, session) {
                                                  text = ~paste('track_name: ', track_name)) %>% layout(showlegend = FALSE)
     
     # Valence
-    valence <- which_albums() %>%
+    valence <- which_albums_att() %>%
       plot_ly(
         x = ~album_name,
         y = ~valence,
@@ -712,7 +802,7 @@ shinyServer(function(input, output, session) {
       layout(
         xaxis = xform,
         yaxis = list(
-          title = "Valence",
+          title = "Positivity",
           zeroline = F
         )
       )
@@ -720,7 +810,7 @@ shinyServer(function(input, output, session) {
     valence <- valence %>% add_markers(x = ~album_name, y = ~valence, color = I("black"), text = ~paste('track_name: ', track_name)) %>% layout(showlegend = FALSE)
     
     # Energy
-    energy <- which_albums() %>%
+    energy <- which_albums_att() %>%
       plot_ly(
         x = ~album_name,
         y = ~energy,
@@ -746,7 +836,7 @@ shinyServer(function(input, output, session) {
     energy <- energy %>% add_markers(x = ~album_name, y = ~energy, color = I("black"), text = ~paste('track_name: ', track_name)) %>% layout(showlegend = FALSE)
     
     # Danceability
-    danceability <- which_albums() %>%
+    danceability <- which_albums_att() %>%
       plot_ly(
         x = ~album_name,
         y = ~danceability,
@@ -764,7 +854,7 @@ shinyServer(function(input, output, session) {
       layout(
         xaxis = xform,
         yaxis = list(
-          title = "Energy",
+          title = "Danceability",
           zeroline = F
         )
       )
@@ -772,7 +862,7 @@ shinyServer(function(input, output, session) {
     danceability <- danceability %>% add_markers(x = ~album_name, y = ~danceability, color = I("black"), text = ~paste('track_name: ', track_name)) %>% layout(showlegend = FALSE)
     
     # Speechiness
-    speechiness <- which_albums() %>%
+    speechiness <- which_albums_att() %>%
       plot_ly(
         x = ~album_name,
         y = ~speechiness,
@@ -790,7 +880,7 @@ shinyServer(function(input, output, session) {
       layout(
         xaxis = xform,
         yaxis = list(
-          title = "Energy",
+          title = "Speechiness",
           zeroline = F
         )
       )
@@ -804,28 +894,45 @@ shinyServer(function(input, output, session) {
                            danceability = danceability,
                            speechiness = speechiness
     )
-    plotToReturn
+    plotToReturn %>% layout(font=t)
+  })
+  
+  #_______________# KEY
+  
+  which_albums_key <- reactive({
+    switch(input$radio_album_key,
+           only_og = albums_only_og,
+           only_all = albums_only_all
+    )
   })
   
   output$keyalbum <- renderPlotly({
     # Plot key distribution for each album.
-    x <- which_albums() %>%
-      ggplot(aes_string(y = "key", x = "album_name", track_name="track_name")) + 
+    x <- which_albums_key() %>%
+      ggplot(aes_string(y = "key_mode", x = "album_name", track_name="track_name")) + 
       ggbeeswarm::geom_beeswarm(groupOnX = TRUE, aes(color = album_name), size = 1) + 
       guides(color = FALSE) +
       theme_minimal()+
-      scale_y_continuous(breaks=seq(0,11,1))+
       aes(x = fct_reorder(album_name, album_release_year, .desc = FALSE))+
-      labs(title = 'Keys of Tracks', 
+      labs(title = "", 
            subtitle = "Dots represents songs.",
            y = "Key",
            x = "Album")
-    ggplotly(x, source = "select", tooltip = c("track_name")) %>% layout(showlegend = FALSE)
+    ggplotly(x, source = "select", tooltip = c("track_name")) %>% layout(showlegend = FALSE) %>% layout(font=t)
+  })
+  
+  #______________# MODE
+  
+  which_albums_mode <- reactive({
+    switch(input$radio_album_mode,
+           only_og = albums_only_og,
+           only_all = albums_only_all
+    )
   })
   
   output$modealbum <- renderPlotly({
     # Group by mode and album to determine how tracks on each album are in major and minor key.
-    modee <- which_albums() %>%
+    modee <- which_albums_mode() %>%
       group_by(mode_name, album_name, album_release_year) %>%
       dplyr::summarize(percentage = n()) %>% arrange(percentage)
     
@@ -834,12 +941,13 @@ shinyServer(function(input, output, session) {
       geom_bar(position="fill", stat='identity')+
       scale_fill_manual(values = c("plum1","royalblue1"), name = "Mode")+
       theme_minimal()+
+      theme(plot.title = element_text(hjust = 0.5))+
       scale_y_continuous(breaks=seq(0,1,.1))+
       aes(x = fct_reorder(album_name, album_release_year, .desc = FALSE))+
       labs(title = 'Percentage of Songs on Each Album that are in Major/Minor', 
            y = "Percentage",
            x = "Album")
-    ggplotly(mode_key, tooltip = c("percentage"))
+    ggplotly(mode_key, tooltip = c("percentage")) %>% layout(font=t)
   })
   
   
@@ -848,12 +956,18 @@ shinyServer(function(input, output, session) {
   output$collab_DT <- DT::renderDataTable(collab_DT)
   
   #______________# Collabs vs solos
+  
   jb_tracks_collab <- jb_tracks
   is_collab_vec <- unlist(lapply(jb_tracks_collab$artists, is_collab))
   jb_tracks_collab$is_collab <- is_collab_vec
   
   num_percent_choice <- reactive(input$num_percent_choice)
   num_percent_include_remix <- reactive(input$num_percent_remix_check)
+  
+  collaborative_songs <- jb_tracks_collab %>% filter(is_collab == "Collaboration")
+  
+  output$collab_vs_solo1 <- renderText(paste("All tracks: ", target_artist_name, " has released ", NROW(collaborative_songs)," collaborative tracks — ", round((NROW(collaborative_songs)/NROW(jb_tracks_collab))*100, 2), "% of his releases.", sep=""))
+  output$collab_vs_solo2 <- renderText(paste("Singles/Albums only: ", target_artist_name, " has released ", NROW(collaborative_songs %>% filter(album_type != "remix"))," collaborative tracks — ", round((NROW(collaborative_songs %>% filter(album_type != "remix"))/NROW(jb_tracks_collab %>% filter(album_type != "remix")))*100,2), "% of his releases.", sep = ""))
   
   
   output$collabs_vs_solos <- renderPlotly({
@@ -866,13 +980,28 @@ shinyServer(function(input, output, session) {
     }
     
     jb_is_collab <- tracks_to_look_at %>% group_by(album_release_year, is_collab, track_name) %>% dplyr::summarize(count = n()) %>% arrange(-count)
-    num <- ggplot(jb_is_collab, aes_string(fill="is_collab", x="album_release_year", y="count", track_name = "track_name"))+
+    num_stacked <- ggplot(jb_is_collab, aes_string(fill="is_collab", x="album_release_year", y="count", track_name = "track_name"))+
       geom_bar(stat='identity', color = "white")+
-      labs(title = "Number of Collab vs. Solo Songs Per Year")+
+      labs(title = "Number of Collab vs. Solo Songs Per Year (Stacked)")+
       scale_fill_manual(values=c("mediumaquamarine", "palevioletred"), name="Type", breaks=c("Collaboration", "Solo"))+
       theme_minimal()+
+      theme(plot.title = element_text(hjust = 0.5))+
+      #theme(axis.text.x = element_text(angle = 90, size = 10))+
+      scale_x_continuous(breaks=seq(min(tracks_to_look_at$album_release_year), max(tracks_to_look_at$album_release_year), 1))+
       scale_y_continuous(breaks=seq(0,NROW(jb_tracks_collab),5))
-    num <- ggplotly(num, tooltip = c("track_name"))
+    num_stacked <- ggplotly(num_stacked, tooltip = c("track_name"))
+    
+    jb_is_collab2 <- tracks_to_look_at %>% group_by(album_release_year, is_collab) %>% dplyr::summarize(count = n()) %>% arrange(-count)
+    
+    num_grouped <- ggplot(jb_is_collab2, aes_string(fill="is_collab", x="album_release_year", y="count"))+
+      geom_bar(width = .3,position = "dodge",stat='identity', color = "white")+
+      labs(title = "Number of Collab vs. Solo Songs Per Year (Grouped)")+
+      scale_fill_manual(values=c("mediumaquamarine", "palevioletred"), name="Type", breaks=c("Collaboration", "Solo"))+
+      theme_minimal()+
+      theme(plot.title = element_text(hjust = 0.5))+
+      scale_x_continuous(breaks=seq(min(tracks_to_look_at$album_release_year), max(tracks_to_look_at$album_release_year), 1))+
+      scale_y_continuous(breaks=seq(0,NROW(jb_tracks_collab),5))
+    num_grouped <- ggplotly(num_grouped, tooltip = c("count"))
     
     jb_is_collab <- tracks_to_look_at %>% group_by(album_release_year, is_collab) %>% dplyr::summarize(percentage = n()) %>% arrange(-percentage)
     per <- ggplot(jb_is_collab, aes_string(fill="is_collab", x="album_release_year", y="percentage"))+
@@ -880,14 +1009,19 @@ shinyServer(function(input, output, session) {
        labs(title = "Percentage of Songs that are Collaborations")+
        scale_fill_manual(values=c("mediumaquamarine", "palevioletred"), name="Type", breaks=c("Collaboration", "Solo"))+
        theme_minimal()+
+       theme(plot.title = element_text(hjust = 0.5))+
+       scale_x_continuous(breaks=seq(min(tracks_to_look_at$album_release_year), max(tracks_to_look_at$album_release_year), 1))+
        scale_y_continuous(breaks=seq(0,1,.1))
     per <- ggplotly(per, tooltip = c("percentage"))
     
-    if (num_percent_choice() == "count") {
-      num
+    if (num_percent_choice() == "count_stacked") {
+      num_stacked %>% layout(font=t)
+    }
+    else if (num_percent_choice() == "count_grouped") {
+      num_grouped %>% layout(font=t)
     }
     else {
-      per
+      per %>% layout(font=t)
     }
     
   })
@@ -907,7 +1041,9 @@ shinyServer(function(input, output, session) {
   fig <- fig %>% layout(title = "Percentage of Singles that are Collaborations",
                         showlegend = FALSE,
                         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-                        yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+                        yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE)) %>% layout(font=list(
+                          family = "Helvetica",
+                          size = 12))
   
   output$singlespiechart <- renderPlotly(fig)
   
@@ -919,8 +1055,9 @@ shinyServer(function(input, output, session) {
     labs(title = "Number of Collaborative vs. Solo Singles", x = "")+
     scale_fill_manual(values=c("mediumaquamarine", "palevioletred"), name="Type", breaks=c("Collaboration", "Solo"))+
     theme_minimal()+
+    theme(plot.title = element_text(hjust = 0.5))+
     scale_y_continuous(breaks=seq(0,NROW(jb_tracks_collab),5))
-  singlesbar <- ggplotly(singlesbar, tooltip = c("track_name"))
+  singlesbar <- ggplotly(singlesbar, tooltip = c("track_name")) %>% layout(font=t)
   
   output$singlesbarchart <- renderPlotly(singlesbar)
   
@@ -928,6 +1065,9 @@ shinyServer(function(input, output, session) {
 
   types_chosen_collaborators <- reactive(input$type_choice_collaborators)
   output$testtext2 <- renderText(types_chosen_collaborators())
+  
+  output$totalnumcollaborators <- renderText(paste(target_artist_name, " has collaborated with ", length(unique(jb_collabs_full$artist2)), " total artists (all releases)."))
+  output$totalnumcollaboratorsnoremix <- renderText(paste(target_artist_name, " has collaborated with ", length(unique((jb_collabs_full %>% filter(album_type != "remix"))$artist2)), " artists if we exclude remixes."))
   
   output$collaborator_plot <- renderPlotly({
     
@@ -971,15 +1111,59 @@ shinyServer(function(input, output, session) {
   
   collaborators <- ggplot(num_collabs_person_track, aes_string(fill="factor(album_type, c('remix','single','album'))", x="reorder(collaborator, num_collabs_track, sum)", weight="num_collabs_track", track_name = "track_name"))+
     geom_bar(width = .7, color = "white")+
-    labs(title = "J Balvin's Collaborators (All Tracks)",
+    labs(title = "Number of Tracks per Collaborator",
          y = "Number of Tracks with Collaborator",
          x = "Collaborator")+
     theme_minimal()+
+    theme(plot.title = element_text(hjust = 0.5))+
     scale_y_continuous(breaks=seq(0, (num_collabs_person$collaborator %>% unique() %>% length()),5))+
     coord_flip()+
     scale_fill_manual(values=colors, name = "Type\nof Release")
   collaborators <- ggplotly(collaborators, tooltip = c("track_name"))
-  collaborators
+  collaborators %>% layout(font=t)
+  })
+  
+  #_________# Collaborators by Year
+  
+  types_chosen_collaborators_yr <- reactive(input$type_choice_collaborators_yr)
+  
+  output$collaborators_yr_plot <- renderPlotly({
+    
+    if (is.null(types_chosen_collaborators_yr())){
+      return(NULL)
+    }
+    
+    tracks_to_use <- jb_collabs_full %>% filter(album_type %in% types_chosen_collaborators_yr())
+    split_df_artist <- split(tracks_to_use, f = tracks_to_use$artist2)
+    collaborators_yr <- map_df(split_df_artist, flatten_songs)
+    collaborators_yr$weight <- 1
+    
+    # Helper function to prepare dataframe for flattening
+    flatten_songs <- function(single_artist_df){
+      split_df_yr <- split(single_artist_df, f = single_artist_df$year)
+      new_df <- map_df(split_df_yr, flatten_songs_2)
+      return(new_df)
+    }
+    
+    # Helper function to change format of dataframe, flatten all tracks for a given year and genre into one row
+    flatten_songs_2 <- function(df){
+      artist <- unique(df$artist2)
+      year <- unique(df$year)
+      unique_tracks <- sort(unique(df$track_name))
+      tracks <- (paste(unique_tracks, collapse="\n"))
+      num_tracks <- length(unique_tracks)
+      new_df <- data.frame(artist = artist, tracks_together = tracks, num_tracks = num_tracks, year = year)
+      return(new_df)
+    }
+    
+    b <- ggplot(collaborators_yr, aes_string(fill="artist", x="year", weight="weight", tracks = "tracks"))+
+      geom_bar(position = "stack", width = .7, color = "white")+
+      labs(title = "",
+           y = "Number of Collaborators that Year",
+           x = "Year of Collaboration")+
+      scale_y_continuous(breaks=seq(0, NROW(collaborators_yr), 5))+
+      theme_minimal()
+    ggplotly(b, tooltip = c("artist", "tracks")) %>% layout(showlegend = FALSE) %>% layout(font=t)
   })
   
   #_________# Number of Collaborations
@@ -1028,13 +1212,13 @@ shinyServer(function(input, output, session) {
   
   num_collabs <- ggplot(num_collabs_yr, aes_string(fill="factor(album_type, c('remix','single','album'))", x="year", weight="num_collabs.x", track_name = "track_name", collaborator = "collaborator", num_collabs_of_type = "num_collabs_of_type"))+
     geom_bar(width = .7, color = "white")+
-    labs(title = "Number of Collaborations by Year",
+    labs(title = " ",
          y = "Number of Collaborations",
          x = "Year")+
     theme_minimal()+
     scale_y_continuous(breaks=seq(0, NROW(num_collabs_yr), 10))+
     scale_fill_manual(values=colors, name = "Type\nof Release")
-  ggplotly(num_collabs, tooltip = c("track_name", "collaborator", "num_collabs_of_type")) 
+  ggplotly(num_collabs, tooltip = c("track_name", "collaborator")) %>% layout(font=t)
   
   })
   
@@ -1072,14 +1256,32 @@ shinyServer(function(input, output, session) {
   names(num_collabs_year_genre)[names(num_collabs_year_genre) == 'name.y'] <- 'collaborator'
   names(num_collabs_year_genre)[names(num_collabs_year_genre) == 'genres.y'] <- 'genres'
   
-  # Plot how many same-genre and cross-genre collaborations JB does per year (Num)
+  # Plot how many same-genre and cross-genre collaborations JB does per year (Num Stacked)
   num <- ggplot(num_collabs_year_genre, aes_string(fill="same_genre", x="year", weight="num_collabs", track_name = "track_name", collaborator = "collaborator", genres = "genres"))+
     geom_bar(color = "white")+
     scale_fill_manual(values = c("plum1","royalblue1"), name = "Genre of\ncollaborator")+
-    labs(title = "Number of Same-/Cross-Genre Collabs")+
+    labs(title = "Number of Same-/Cross-Genre Collabs (Stacked)")+
     theme_minimal()+
+    theme(plot.title = element_text(hjust = 0.5))+
     scale_y_continuous(breaks=seq(0, NROW(num_collabs_year_genre), 10))
-  num <- ggplotly(num, tooltip = c("track_name", "collaborator", "genres"))
+  num <- ggplotly(num, tooltip = c("track_name", "collaborator", "genres")) 
+  
+  # Num grouped
+  
+  num_collabs_year_genre_grouped <- collaborations_genre_yr %>% filter(album_type %in% types_chosen_same_diff()) %>%
+    group_by(year, same_genre) %>%
+    dplyr::summarize(num_collabs = n()) %>% arrange(-num_collabs)
+  names(num_collabs_year_genre_grouped)[names(num_collabs_year_genre_grouped) == 'name.y'] <- 'collaborator'
+  names(num_collabs_year_genre_grouped)[names(num_collabs_year_genre_grouped) == 'genres.y'] <- 'genres'
+  
+  num_grouped <- ggplot(num_collabs_year_genre_grouped, aes_string(fill="same_genre", x="year", weight="num_collabs"))+
+    geom_bar(color = "white", position = "dodge")+
+    scale_fill_manual(values = c("plum1","royalblue1"), name = "Genre of\ncollaborator")+
+    labs(title = "Number of Same-/Cross-Genre Collabs (Grouped)")+
+    theme_minimal()+
+    theme(plot.title = element_text(hjust = 0.5))+
+    scale_y_continuous(breaks=seq(0, NROW(num_collabs_year_genre), 10))
+  num_grouped <- ggplotly(num_grouped, tooltip = c("count"))
   
   # Percentage
   
@@ -1088,14 +1290,18 @@ shinyServer(function(input, output, session) {
     labs(title = "Percentage of Same-/Cross-Genre Collabs")+
     scale_fill_manual(values = c("plum1", "royalblue1"), name = "Genre of\ncollaborator")+
     theme_minimal()+
+    theme(plot.title = element_text(hjust = 0.5))+
     scale_y_continuous(breaks=seq(0, 1, .1))
   perc <- ggplotly(perc, tooltip = c("count"))
   
-  if (num_percent_choice_genre() == "count") {
-    num
+  if (num_percent_choice_genre() == "count_stacked") {
+    num %>% layout(font=t)
   }
-  else {
-    perc
+  else if (num_percent_choice_genre() == "count_grouped") {
+    num_grouped %>% layout(font=t)
+  }
+   else {
+    perc %>% layout(font=t)
   }
   
   })
@@ -1104,6 +1310,11 @@ shinyServer(function(input, output, session) {
   
   genre_collaborator_include_remix <- reactive(input$genre_collaborator_remix_check)
   
+  
+  output$totalnumgenres <- renderText(paste("J Balvin has collaborated with artists of ", length(unique(num_collabs_genre$genre)), " different genres (all releases).", sep=""))
+  output$totalnumgenresnoremix <- renderText(paste("J Balvin has collaborated with artists of ", length(unique((num_collabs_genre %>% filter(album_type != "remix"))$genre)), " different genres (excluding remixes).", sep = ""))
+  
+
   output$genres_of_collabors_plot <- renderPlotly({
     
     if (genre_collaborator_include_remix() == FALSE){
@@ -1116,14 +1327,14 @@ shinyServer(function(input, output, session) {
       
       b <- ggplot(artist_genres, aes_string(fill="factor(album_types, c('single','album & single','album'))", x="reorder(genre, artist_val, sum)", y="artist_val", collaborator = "collaborator", tracks = "tracks"))+
         geom_bar(stat = "identity", width = .6, color = "white")+
-        labs(title = "J Balvin's Collaborators' Genres (Excluding Remixes)",
+        labs(title = "",
              y = "Number of Collaborators Who Have This Genre Tag",
              x = "Genre tag of collaborator")+
         theme_minimal()+
         scale_y_continuous(breaks=seq(0, (NROW(unique(artist_genres$genre))),5))+
         coord_flip()+
         scale_fill_manual(values=c("#619CFF", "#C77CFF", "#F8766D"), name = "Type\nof Release(s)")
-      ggplotly(b, tooltip = c("collaborator", "tracks"))
+      ggplotly(b, tooltip = c("collaborator", "tracks")) %>% layout(font=t)
     }
     else {
   
@@ -1134,18 +1345,18 @@ shinyServer(function(input, output, session) {
   
   b <- ggplot(artist_genres, aes_string(fill = "genre", x="reorder(genre, artist_val, sum)", weight="artist_val", collaborator = "collaborator", album_types = "album_types", tracks = "tracks"))+
     geom_bar(width=0.6, color = "white")+
-    labs(title = "J Balvin's Collaborators' Genres (All Tracks)",
+    labs(title = "",
          y = "Number of Collaborators Who Have This Genre Tag",
          x = "Genre of collaborator")+
     theme_minimal()+
     scale_y_continuous(breaks=seq(0, (NROW(unique(artist_genres$genre))),5))+
     coord_flip()
-  ggplotly(b, tooltip = c("collaborator", "album_types", "tracks")) %>% layout(showlegend = FALSE)
+  ggplotly(b, tooltip = c("collaborator", "album_types", "tracks")) %>% layout(showlegend = FALSE) %>% layout(font=t)
     }
   
   })
   
-  #________# Genres of Collaborations by Year
+  #________# Number of Genres Collaborated with by Year
   
   types_chosen_genre_col_yr <- reactive(input$type_choice_genre_col_yr)
   
@@ -1155,46 +1366,30 @@ shinyServer(function(input, output, session) {
       return(NULL)
     }
   
-    
   all_genres_yrs <- all_genres %>% filter(album_type %in% types_chosen_genre_col_yr())
   drop_cols <- c("album_type","track_name")
   all_genres_yrs <- unique(all_genres_yrs[,!(names(all_genres_yrs) %in% drop_cols)])
   
-  # Helper function to prepare dataframe for flattening
-  flatten_artists <- function(single_genre_df){
-    split_df_yr <- split(single_genre_df, f = single_genre_df$year)
-    new_df <- map_df(split_df_yr, flatten_artists_2)
-    return(new_df)
-  }
-  
-  # Helper function to change format of dataframe, flatten all artists for a given genre into one row
-  flatten_artists_2 <- function(df){
-    genre <- unique(df$genre)
-    year <- unique(df$year)
-    unique_artists <- sort(unique(df$collaborator))
-    artists <- (paste(unique_artists, collapse="\n"))
-    num_artists <- length(unique_artists)
-    new_df <- data.frame(genre = genre, year = year, num_artists = num_artists, artists = artists)
-    return(new_df)
-  }
-  
   split_df_genre <- split(all_genres_yrs, f = all_genres_yrs$genre)
   genre_yr_artists <- map_df(split_df_genre, flatten_artists)
+  genre_yr_artists$weight <- 1
   
-  b <- ggplot(genre_yr_artists, aes_string(fill="genre", x="year", weight="num_artists", artists = "artists"))+
-    geom_bar(position = "dodge")+
-    labs(title = "J Balvin's Collaborators' Genres (All Tracks)",
-         y = "Number of collaborators with genre tag",
-         x = "Genre of collaborator")+
+  b <- ggplot(genre_yr_artists, aes_string(fill="reorder(genre, num_artists, sum)", x="year", y="weight", genre = "genre", artists = "artists", num_artists = "num_artists"))+
+    geom_bar(position = "stack", stat = "identity"
+      ,color="white"
+      )+
+    labs(title = "",
+         y = "Number of Genres Collaborated With that Year",
+         x = "Year")+
     theme_minimal()+
     scale_y_continuous(breaks=seq(0, (num_collabs_person$collaborator %>% unique() %>% length()), 5))
-  ggplotly(b, tooltip = c("genre", "artists", "num_artists")) %>% layout(showlegend = FALSE)
+  ggplotly(b, tooltip = c("genre", "artists", "num_artists")) %>% layout(showlegend = FALSE) %>% layout(font=t)
   
   })
   
-  #datatable
+  # Genres of Collaborators by Year
   
-  output$genre_yr_DT <- DT::renderDataTable({
+  output$num_genres_of_collabors_by_year_plot <- renderPlotly({
     
     if (is.null(types_chosen_genre_col_yr())){
       return(NULL)
@@ -1204,37 +1399,21 @@ shinyServer(function(input, output, session) {
     drop_cols <- c("album_type","track_name")
     all_genres_yrs <- unique(all_genres_yrs[,!(names(all_genres_yrs) %in% drop_cols)])
     
-    # Helper function to prepare dataframe for flattening
-    flatten_artists <- function(single_genre_df){
-      split_df_yr <- split(single_genre_df, f = single_genre_df$year)
-      new_df <- map_df(split_df_yr, flatten_artists_2)
-      return(new_df)
-    }
-    
-    # Helper function to change format of dataframe, flatten all artists for a given genre into one row
-    flatten_artists_2 <- function(df){
-      genre <- unique(df$genre)
-      year <- unique(df$year)
-      unique_artists <- sort(unique(df$collaborator))
-      artists <- (paste(unique_artists, collapse="\n"))
-      num_artists <- length(unique_artists)
-      new_df <- data.frame(genre = genre, year = year, num_artists = num_artists, artists = artists)
-      return(new_df)
-    }
-    
     split_df_genre <- split(all_genres_yrs, f = all_genres_yrs$genre)
     genre_yr_artists <- map_df(split_df_genre, flatten_artists)
     
-    # Add num genres per year
-    printable <- genre_yr_artists %>% group_by(genre,year) %>% group_by(year) %>% dplyr::summarize(num_genres = n())
-    datatable(
-      printable, caption = "Number of genres collaborated with per year", rownames = FALSE, options = list(
-        dom = 't',
-        pageLength = NROW(printable),
-        scrollX = TRUE,
-        buttons = c('csv')
-      )
-    )
+    b <- ggplot(genre_yr_artists, aes_string(fill="reorder(genre, num_artists, sum)", x="year", y="num_artists", genre = "genre", artists = "artists", num_artists = "num_artists"))+
+      geom_bar(position = "dodge", stat = "identity"
+               #,color="white"
+      )+
+      labs(title = "",
+           y = "Number of Collaborators With Genre Tag",
+           x = "Year")+
+      theme_minimal()+
+      scale_y_continuous(breaks=seq(0, (num_collabs_person$collaborator %>% unique() %>% length()), 5))
+    ggplotly(b, tooltip = c("genre", "artists")) %>% layout(font=t)
+    #%>% layout(showlegend = FALSE) 
+    
   })
   
   #NETWORK_____________________________________________________________________________________________________
@@ -1270,12 +1449,12 @@ shinyServer(function(input, output, session) {
   
   pop <- artist_vertices %>% arrange(-popularity)
   pop_index <- which(pop$name == target_artist_name)
-  pop2 <- pop[,(names(pop) %in% c("name","popularity", "genres"))][1:100,]
+  pop2 <- pop[,(names(pop) %in% c("name","popularity", "genres"))]
   
   output$popularity_text_all <- renderText(paste(target_artist_name,
   " has a popularity score of ", pop[pop_index,]$popularity,
   ", making him the ", toOrdinal(pop_index),
-  " most popular artist of all artists in the network.", sep = ""))
+  " most popular artist in the network of ", NROW(pop)," artists.", sep = ""))
 
   output$popularity_DT <- DT::renderDataTable({
     datatable(
@@ -1342,7 +1521,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has the ", ranking_string,
-                 " highest popularity score of the artists in the selected genres.",
+                 " highest popularity score of the ",
+                 NROW(within_genres),
+                 " artists of the selected genres.",
                  sep = ""))
   })
 
@@ -1354,7 +1535,7 @@ shinyServer(function(input, output, session) {
   
   deg <- artist_vertices_color %>% filter(type == "billboard") %>% arrange(-degree)
   deg_index <- which(deg$name == target_artist_name)
-  deg2 <- deg[,(names(deg) %in% c("name","popularity", "degree", "genres"))][1:100,]
+  deg2 <- deg[,(names(deg) %in% c("name","popularity", "degree", "genres"))]
   col_order <- c("name", "degree", "genres", "popularity")
   deg2 <- deg2[, col_order]
   
@@ -1364,7 +1545,9 @@ shinyServer(function(input, output, session) {
                                              deg[deg_index,]$degree,
                                              ", which means he has collaborated with more unique artists than ",
                                              round((NROW(artist_df)-deg_index)/NROW(artist_df)*100,2),
-                                             "% of all of the artists who have been on Billboard in the past decade.",
+                                             "% of all of the ",
+                                             NROW(deg),
+                                             " artists who have been on Billboard in the past decade.",
                                              sep=""))
   
   
@@ -1389,7 +1572,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = deg$color)
       )
-    fig
+    fig %>% layout(font=t)
   })
   
   #___Within genre
@@ -1443,7 +1626,7 @@ shinyServer(function(input, output, session) {
      fig <- fig %>% add_markers(
        marker = list(color = deg_within_genres()$color)
      )
-     fig
+     fig %>% layout(font=t)
    })
   
   output$degree_text_genre <- renderText({
@@ -1458,7 +1641,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has the ", ranking_string,
-                 " highest degree centrality of the Billboard artists in the selected genres.",
+                 " highest degree centrality of the ",
+                 NROW(within_genres),
+                 " Billboard artists of the selected genres.",
                  sep = ""))
     })
   
@@ -1470,7 +1655,7 @@ shinyServer(function(input, output, session) {
   
   eig <- artist_vertices_color %>% filter(type == "billboard") %>% arrange(-eigenvector)
   eig_index <- which(eig$name == target_artist_name)
-  eig2 <- eig[,(names(eig) %in% c("name","popularity", "eigenvector", "genres"))][1:100,]
+  eig2 <- eig[,(names(eig) %in% c("name","popularity", "eigenvector", "genres"))]
   col_order <- c("name", "eigenvector", "genres", "popularity")
   eig2 <- eig2[, col_order]
   
@@ -1481,7 +1666,9 @@ shinyServer(function(input, output, session) {
                                                   format(round(eig[eig_index,]$eigenvector,2), scientific=F),
                                                   ", which is greater than ",
                                                   round((NROW(artist_df)-eig_index)/NROW(artist_df)*100,2),
-                                                  "% of the artists who have been on Billboard in the past decade.
+                                                  "% of the ",
+                                                  NROW(eig),
+                                                  " artists who have been on Billboard in the past decade.
                                                   This means that he is an influential collaborator who collaborates
                                                   with other influential collaborators.", sep=""))
   
@@ -1506,7 +1693,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = eig$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   #___Within genre
@@ -1556,7 +1743,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = eig_within_genres()$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   output$eigenvector_text_genre <- renderText({
@@ -1571,7 +1758,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has the ", ranking_string,
-                 " highest eigenvector centrality of the Billboard artists in the selected genres.",
+                 " highest eigenvector centrality of the ",
+                 NROW(within_genres),
+                 " Billboard artists in the selected genres.",
                  sep = ""))
   })
   
@@ -1581,7 +1770,7 @@ shinyServer(function(input, output, session) {
   
   bet <- artist_vertices_color %>% filter(type == "billboard") %>% arrange(-betweenness)
   bet_index <- which(bet$name == target_artist_name)
-  bet2 <- bet[,(names(bet) %in% c("name","popularity", "betweenness", "genres"))][1:100,]
+  bet2 <- bet[,(names(bet) %in% c("name","popularity", "betweenness", "genres"))]
   col_order <- c("name", "betweenness", "genres", "popularity")
   bet2 <- bet2[, col_order]
   
@@ -1591,7 +1780,9 @@ shinyServer(function(input, output, session) {
                                              round(bet[bet_index,]$betweenness),
                                              ", a higher value than ",
                                              round((NROW(artist_df)-bet_index)/NROW(artist_df)*100,2),
-                                             "% of all of the artists who have been on Billboard in the past decade.",
+                                             "% of the ",
+                                             NROW(bet),
+                                             " artists who have been on Billboard in the past decade.",
                                              sep=""))
   
   output$betweenness_DT <- DT::renderDataTable({
@@ -1615,7 +1806,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = bet$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   #___Within genre
@@ -1665,7 +1856,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = bet_within_genres()$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   output$betweenness_text_genre <- renderText({
@@ -1680,7 +1871,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has the ", ranking_string,
-                 " highest betweenness centrality of the Billboard artists in the selected genres.",
+                 " highest betweenness centrality of the ",
+                 NROW(within_genres),
+                 " Billboard artists in the selected genres.",
                  sep = ""))
   })
   
@@ -1692,7 +1885,7 @@ shinyServer(function(input, output, session) {
   
   fol <- artist_vertices_color %>% arrange(-followers.total)
   folindex <- which(fol$name == target_artist_name)
-  fol2 <- fol[,(names(fol) %in% c("name","popularity", "followers.total", "genres"))][1:100,]
+  fol2 <- fol[,(names(fol) %in% c("name","popularity", "followers.total", "genres"))]
   col_order <- c("name", "followers.total", "genres", "popularity")
   fol2 <- fol2[, col_order]
   
@@ -1701,7 +1894,9 @@ shinyServer(function(input, output, session) {
                                                 format(fol[folindex,]$followers.total, scientific=F),
                                                 " followers on Spotify — more followers than ",
                                                 round((NROW(artist_df)-folindex)/NROW(artist_df)*100,2),
-                                                "% of all of the Billboard artists.", sep=""))
+                                                "% of the ",
+                                                NROW(fol),
+                                                " Billboard artists.", sep=""))
   
   output$followers_DT <- DT::renderDataTable({
     datatable(
@@ -1724,7 +1919,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = fol$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   #_____Within genre
@@ -1774,7 +1969,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = fol_within_genres()$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   output$followers_text_genre <- renderText({
@@ -1789,7 +1984,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has the ", ranking_string,
-                 " highest number of Spotify followers of the artists in the selected genres.",
+                 " highest number of Spotify followers of the ",
+                 NROW(within_genres),
+                 " artists in the selected genres.",
                  sep = ""))
   })
   
@@ -1808,7 +2005,9 @@ shinyServer(function(input, output, session) {
                                                 format(num[numindex,]$total_num_songs, scientific=F),
                                                 " unique songs on Spotify — more songs than ",
                                                 round((NROW(artist_df)-numindex)/NROW(artist_df)*100,2),
-                                                "% of all of the Billboard artists.", sep= ""))
+                                                "% of the ",
+                                                NROW(num),
+                                                " Billboard artists.", sep= ""))
   
   output$num_songs_DT <- DT::renderDataTable({
     datatable(
@@ -1831,7 +2030,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = num$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   #Within genre
@@ -1881,7 +2080,7 @@ shinyServer(function(input, output, session) {
     fig <- fig %>% add_markers(
       marker = list(color = num_within_genres()$color)
     )
-    fig
+    fig %>% layout(font=t)
   })
   
   output$num_songs_text_genre <- renderText({
@@ -1896,7 +2095,9 @@ shinyServer(function(input, output, session) {
     
     return(paste(target_artist_name,
                  " has released the ", ranking_string,
-                 " highest number of songs out of the Billboard artists in the selected genres.",
+                 " highest number of songs out of the ",
+                 NROW(within_genres),
+                 " Billboard artists in the selected genres.",
                  sep = ""))
   })
   

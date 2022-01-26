@@ -7,32 +7,40 @@ p {
   margin: 0px 50px 50px 50px; 
   color: gray;
   font-size: 18px;
+  font-weight: normal;
+  text-align: left;
 }
 
-.no-indent {
-  margin: 0px; 
-  color: blue;
-  font-size: 15px;
-}
-
-.caption {
-  margin: -45px 50px 25px 50px;
-  color: orange;
-  font-weight: italic;
-}
 
 .shiny-text-output {
   /* T R B L */
   margin: 0px 50px 25px 50px; 
-  color: purple;
+  color: midnightblue;
   font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.above-plot {
+  /* T R B L */
+  margin: 0px 50px 25px 50px; 
+  color: black;
+  font-weight: normal;
+  font-size: 18px;
+}
+
+.no-indent {
+  margin: 0px; 
+  color: dimgray;
+  font-size: 15px;
 }
 
 .net-text {
   /* T R B L */
   margin: 50px 50px 0px 50px; 
-  color: pink;
-  font-size: 18px;
+  color: midnightblue;
+  font-size: 20px;
+  font-weight: bold;
 }
 
 h2 {
@@ -42,7 +50,7 @@ h2 {
 
 
 h1{
-  margin: 50px 50px;
+  margin: 50px 50px 40px 50px;
 }
 
 .p {
@@ -50,4 +58,18 @@ h1{
   margin: 0px 50px 50px 50px; 
   color: gray;
   font-size: 18px;
+  text-align: left;
+}
+
+.p-mini {
+  /* T R B L */
+  margin: 25px 50px 25px 50px; 
+  color: gray;
+  font-size: 15px;
+}
+
+.caption {
+  margin: -45px 50px 25px 50px;
+  color: slateblue;
+  font-style: italic;
 }
